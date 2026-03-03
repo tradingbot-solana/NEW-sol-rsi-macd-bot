@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from solana.rpc.async_api import AsyncClient
 from anchorpy import Provider, Wallet
 from solders.keypair import Keypair
-from driftpy.client import driftclient
+from driftpy_client import DriftClient
 from driftpy.drift_user import DriftUser
 from driftpy.types import PositionDirection
 
