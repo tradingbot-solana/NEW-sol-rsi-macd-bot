@@ -20,7 +20,7 @@ RPC_URL = os.getenv("RPC_URL")
 BIRDEYE_API_KEY = os.getenv("BIRDEYE_API_KEY")
 MARKET_INDEX = 0  # SOL-PERP
 RISK_PER_TRADE = 0.005
-LEVERAGE = 5  # Start low for safety
+LEVERAGE = 5      # Start low for safety
 CHECK_INTERVAL = 60
 
 SOL_ADDRESS = "So11111111111111111111111111111111111111112"
@@ -101,16 +101,29 @@ async def main():
         print(f"DriftClient subscribe error: {e}")
         return
 
-    # Drift User
+    # Drift User + Collateral with retry & null check
+    drift_user = None
+    collateral = None
     try:
         drift_user = DriftUser(drift_client, user_public_key=keypair.pubkey())
-        collateral = await drift_user.get_total_collateral()
-        if collateral is None:
-            print("Collateral fetch returned None — waiting for Drift user to initialize")
+        print("DriftUser initialized")
+        
+        for attempt in range(5):
+            try:
+                collateral = await drift_user.get_total_collateral()
+                if collateral is not None:
+                    print(f"🚀 Bot is LIVE | Collateral: ${collateral:.2f}")
+                    break
+                else:
+                    print(f"Collateral fetch returned None on attempt {attempt+1} — retrying in 10s")
+                    await asyncio.sleep(10)
+            except Exception as e:
+                print(f"Collateral fetch attempt {attempt+1} error: {e}")
+                await asyncio.sleep(10)
         else:
-            print(f"🚀 Bot is LIVE | Collateral: ${collateral:.2f}")
+            print("Collateral still None after retries — check Drift account on app.drift.trade")
     except Exception as e:
-        print(f"DriftUser init / collateral error: {e}")
+        print(f"DriftUser init error: {e}")
         return
 
     in_position = False
@@ -150,9 +163,10 @@ async def main():
             )
 
             if not has_position:
+                # Re-check collateral in loop (in case it syncs later)
                 collateral = await drift_user.get_total_collateral()
-                if collateral <= 0:
-                    print("No collateral — skipping")
+                if collateral is None or collateral <= 0:
+                    print("No collateral available — skipping cycle")
                     await asyncio.sleep(CHECK_INTERVAL)
                     continue
 
