@@ -26,19 +26,19 @@ CHECK_INTERVAL = 60
 SOL_ADDRESS = "So11111111111111111111111111111111111111112"
 
 async def get_candles():
-    url = "https://public-api.birdeye.so/defi/v3/ohlcv"
-    params = {"address": SOL_ADDRESS, "type": "5m", "currency": "usd", "count": 200}
-    headers = {"x-api-key": BIRDEYE_API_KEY}
-    try:
-        resp = requests.get(url, params=params, headers=headers, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()["data"]["items"]
-        df = pd.DataFrame(data)
-        df = df.rename(columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"})
-        return df[["open", "high", "low", "close", "volume"]].astype(float)
-    except Exception as e:
-        print(f"Failed to fetch candles: {e}")
-        return None
+    for attempt in range(3):
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()["data"]["items"]
+            df = pd.DataFrame(data)
+            df = df.rename(columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"})
+            return df[["open", "high", "low", "close", "volume"]].astype(float)
+        except Exception as e:
+            print(f"Candle fetch attempt {attempt+1} failed: {e}")
+            await asyncio.sleep(5)
+    print("All candle fetch attempts failed — skipping cycle")
+    return None
 
 def calc_indicators(df):
     if df is None or len(df) < 50:
@@ -169,6 +169,8 @@ async def main():
 
         except Exception as e:
             print(f"Loop error: {e}")
+            print(f"Cycle complete — waiting {CHECK_INTERVAL}s")
+            await asyncio.sleep(CHECK_INTERVAL)            
             await asyncio.sleep(30)
 
 if __name__ == "__main__":
