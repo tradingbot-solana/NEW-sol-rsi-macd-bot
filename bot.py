@@ -29,7 +29,7 @@ async def get_candles():
     url = "https://public-api.birdeye.so/defi/v3/ohlcv"
     params = {
         "address": SOL_ADDRESS,
-        "type": "5m",
+        "type": "1h",
         "currency": "usd",
         "count": 200
     }
