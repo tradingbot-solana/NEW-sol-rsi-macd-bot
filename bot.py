@@ -72,11 +72,20 @@ async def main():
         perp_market_indexes=[MARKET_INDEX]
     )
     await drift_client.subscribe()
-    print("DriftClient subscribed successfully")
+    print("Creating DriftClient...")
+drift_client = DriftClient(
+    connection=connection,
+    wallet=wallet,
+    env="mainnet",
+    perp_market_indexes=[MARKET_INDEX]
+)
+await drift_client.subscribe()
+print("DriftClient subscribed successfully")
 
-    drift_user = DriftUser(drift_client)
-    collateral = await drift_user.get_total_collateral()
-    print(f"🚀 Bot is LIVE | Collateral: ${collateral:.2f}")
+# Fixed DriftUser init with explicit pubkey
+drift_user = DriftUser(drift_client, user_public_key=keypair.pubkey())
+collateral = await drift_user.get_total_collateral()
+print(f"🚀 Bot is LIVE | Collateral: ${collateral:.2f}")
 
     while True:
         try:
