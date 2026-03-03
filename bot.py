@@ -69,7 +69,6 @@ async def main():
     drift_client = DriftClient(
         connection=connection,
         wallet=wallet,
-        env="mainnet",          # Correct env
         perp_market_indexes=[MARKET_INDEX]
     )
     await drift_client.subscribe()
