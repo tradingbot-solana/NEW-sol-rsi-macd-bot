@@ -18,16 +18,21 @@ load_dotenv()
 PRIVATE_KEY_JSON = json.loads(os.getenv("PRIVATE_KEY_JSON"))
 RPC_URL = os.getenv("RPC_URL")
 BIRDEYE_API_KEY = os.getenv("BIRDEYE_API_KEY")
-MARKET_INDEX = 0
+MARKET_INDEX = 0  # SOL-PERP
 RISK_PER_TRADE = 0.005
-LEVERAGE = 5
+LEVERAGE = 5      # Start low for safety
 CHECK_INTERVAL = 60
 
 SOL_ADDRESS = "So11111111111111111111111111111111111111112"
 
 async def get_candles():
     url = "https://public-api.birdeye.so/defi/v3/ohlcv"
-    params = {"address": SOL_ADDRESS, "type": "5m", "currency": "usd", "count": 200}
+    params = {
+        "address": SOL_ADDRESS,
+        "type": "5m",
+        "currency": "usd",
+        "count": 200
+    }
     headers = {"x-api-key": BIRDEYE_API_KEY}
     
     for attempt in range(3):
@@ -35,31 +40,40 @@ async def get_candles():
             resp = requests.get(url, params=params, headers=headers, timeout=15)
             resp.raise_for_status()
             json_data = resp.json()
+            
+            # Check for expected structure
             if "data" not in json_data or "items" not in json_data["data"]:
-                print(f"Birdeye response missing data/items on attempt {attempt+1}")
+                print(f"Birdeye response missing 'data/items' on attempt {attempt+1}")
                 await asyncio.sleep(5)
                 continue
             
             data = json_data["data"]["items"]
             if not data:
-                print("Birdeye returned empty items list")
+                print(f"Birdeye returned empty items list on attempt {attempt+1}")
                 await asyncio.sleep(5)
                 continue
             
             df = pd.DataFrame(data)
+            
+            # Safe renaming: only rename if column exists
             rename_map = {"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"}
             df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
             
-            required_cols = ["open", "high", "low", "close", "volume"]
-            if not all(col in df.columns for col in required_cols):
-                print(f"Missing required columns after rename: {df.columns.tolist()}")
+            # Check required columns
+            required = ["open", "high", "low", "close", "volume"]
+            missing = [col for col in required if col not in df.columns]
+            if missing:
+                print(f"Missing required columns after rename on attempt {attempt+1}: {missing}")
+                print(f"Available columns: {df.columns.tolist()}")
                 await asyncio.sleep(5)
                 continue
             
-            return df[required_cols].astype(float)
+            return df[required].astype(float)
+        
         except Exception as e:
             print(f"Candle fetch attempt {attempt+1} failed: {e}")
             await asyncio.sleep(5)
+    
     print("All candle fetch attempts failed — skipping cycle")
     return None
 
@@ -115,7 +129,7 @@ async def main():
         print(f"DriftClient subscribe error: {e}")
         return
 
-    # Drift User with retry on collateral
+    # Drift User with retry & null check on collateral
     drift_user = None
     collateral = None
     try:
