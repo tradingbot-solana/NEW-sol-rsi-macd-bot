@@ -20,7 +20,7 @@ RPC_URL = os.getenv("RPC_URL")
 BIRDEYE_API_KEY = os.getenv("BIRDEYE_API_KEY")
 MARKET_INDEX = 0  # SOL-PERP
 RISK_PER_TRADE = 0.005
-LEVERAGE = 5      # Start low for safety
+LEVERAGE = 5  # Start low for safety
 CHECK_INTERVAL = 60
 
 SOL_ADDRESS = "So11111111111111111111111111111111111111112"
@@ -106,4 +106,83 @@ async def main():
         drift_user = DriftUser(drift_client, user_public_key=keypair.pubkey())
         collateral = await drift_user.get_total_collateral()
         if collateral is None:
-            print
+            print("Collateral fetch returned None — waiting for Drift user to initialize")
+        else:
+            print(f"🚀 Bot is LIVE | Collateral: ${collateral:.2f}")
+    except Exception as e:
+        print(f"DriftUser init / collateral error: {e}")
+        return
+
+    in_position = False
+    position_side = None
+
+    while True:
+        try:
+            df = await get_candles()
+            if df is None:
+                await asyncio.sleep(CHECK_INTERVAL)
+                continue
+
+            df = calc_indicators(df)
+            if df is None:
+                await asyncio.sleep(CHECK_INTERVAL)
+                continue
+
+            latest = df.iloc[-1]
+            prev = df.iloc[-2]
+
+            long_signal = (
+                latest["close"] > latest["ema9"] > latest["ema21"] and
+                prev["rsi9"] < 25 <= latest["rsi9"] and
+                prev["macd_hist"] < 0 <= latest["macd_hist"]
+            )
+
+            short_signal = (
+                latest["close"] < latest["ema9"] < latest["ema21"] and
+                prev["rsi9"] > 75 >= latest["rsi9"] and
+                prev["macd_hist"] > 0 >= latest["macd_hist"]
+            )
+
+            positions = await drift_user.get_user_positions()
+            has_position = any(
+                p.market_index == MARKET_INDEX and abs(p.base_asset_amount) > 0
+                for p in positions
+            )
+
+            if not has_position:
+                collateral = await drift_user.get_total_collateral()
+                if collateral <= 0:
+                    print("No collateral — skipping")
+                    await asyncio.sleep(CHECK_INTERVAL)
+                    continue
+
+                size_usd = collateral * LEVERAGE * RISK_PER_TRADE * 2
+                size_base = int(size_usd / latest["close"] * 1e9)
+
+                if long_signal:
+                    await drift_client.open_position(PositionDirection.LONG(), size_base, MARKET_INDEX)
+                    print(f"✅ LONG opened @ ${latest['close']:.2f}")
+                    in_position = True
+                    position_side = "LONG"
+
+                elif short_signal:
+                    await drift_client.open_position(PositionDirection.SHORT(), size_base, MARKET_INDEX)
+                    print(f"✅ SHORT opened @ ${latest['close']:.2f}")
+                    in_position = True
+                    position_side = "SHORT"
+
+            elif has_position and ((position_side == "LONG" and short_signal) or (position_side == "SHORT" and long_signal)):
+                await drift_client.close_position(MARKET_INDEX)
+                print(f"{position_side} closed")
+                in_position = False
+                position_side = None
+
+            print(f"Cycle complete — waiting {CHECK_INTERVAL}s")
+            await asyncio.sleep(CHECK_INTERVAL)
+
+        except Exception as e:
+            print(f"Loop error: {e}")
+            await asyncio.sleep(30)
+
+if __name__ == "__main__":
+    asyncio.run(main())
