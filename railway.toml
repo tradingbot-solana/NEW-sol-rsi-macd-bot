@@ -1,4 +1,2 @@
-[
-deploy
-]
+[deploy]
 startCommand = "python bot.py"
