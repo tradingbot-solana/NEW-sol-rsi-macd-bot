@@ -17,7 +17,7 @@ load_dotenv()
 
 # === CONFIG ===
 PRIVATE_KEY_JSON = json.loads(os.getenv("PRIVATE_KEY_JSON"))
-RPC_URL = os.getenv("RPC_URL"))
+RPC_URL = os.getenv("RPC_URL")
 BIRDEYE_API_KEY = os.getenv("BIRDEYE_API_KEY")
 MARKET_INDEX = 0  # SOL-PERP
 RISK_PER_TRADE = 0.005
